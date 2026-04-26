@@ -1,131 +1,147 @@
-import logger from '@medic/logger';
-import { DataObject, Nullable, Page } from '../../libs/core';
-import { Doc, isDoc } from '../../libs/doc';
+import logger from "@medic/logger";
+import { DataObject, Nullable, Page } from "../../libs/core";
+import { Doc, isDoc } from "../../libs/doc";
 
 /** @internal */
-export const getDocById = (db: PouchDB.Database<Doc>) => async (id: string): Promise<Nullable<Doc>> => db
-  .get(id)
-  .then(doc => isDoc(doc) ? doc : null)
-  .catch((err: unknown) => {
-    if ((err as PouchDB.Core.Error).status === 404) {
-      return null;
-    }
+export const getDocById =
+  (db: PouchDB.Database<Doc>) =>
+  async (id: string): Promise<Nullable<Doc>> =>
+    db
+      .get(id)
+      .then((doc) => (isDoc(doc) ? doc : null))
+      .catch((err: unknown) => {
+        if ((err as PouchDB.Core.Error).status === 404) {
+          return null;
+        }
 
-    logger.error(`Failed to fetch doc with id [${id}]`, err);
-    throw err;
-  });
+        logger.error(`Failed to fetch doc with id [${id}]`, err);
+        throw err;
+      });
 
 /**
  * Retrieves the identified documents from the database. The order of the provided array is preserved in the returned
  * array of docs regardless of whether all the docs exist or not (or if all the provided ids are valued or not).
  * @internal
  */
-export const getDocsByIds = (db: PouchDB.Database<Doc>) => async (
-  ids: (string | undefined)[]
-): Promise<Nullable<Doc>[]> => {
-  if (!ids.some(Boolean)) {
-    return Array.from({ length: ids.length }, () => null);
-  }
-  const response = await db.allDocs({ keys: ids.map(id => id ?? ''), include_docs: true });
-  return response.rows
-    .map(({ doc }) => doc)
-    .map(doc => isDoc(doc) ? doc : null);
-};
+export const getDocsByIds =
+  (db: PouchDB.Database<Doc>) =>
+  async (ids: (string | undefined)[]): Promise<Nullable<Doc>[]> => {
+    if (!ids.some(Boolean)) {
+      return Array.from({ length: ids.length }, () => null);
+    }
+    const response = await db.allDocs({
+      keys: ids.map((id) => id ?? ""),
+      include_docs: true,
+    });
+    return response.rows.map((row) => {
+      if ("doc" in row && row.doc !== undefined && row.doc !== null) {
+        const doc = row.doc;
+        return isDoc(doc) ? doc : null;
+      }
+      return null;
+    });
+  };
 
 /** @internal */
-export const getDocIdsByIdRange = (db: PouchDB.Database<Doc>) => async (
-  startkey: string,
-  endkey: string,
-  limit?: number,
-  skip = 0
-): Promise<string[]> => {
-  const response = await db.allDocs({
-    startkey,
-    endkey,
-    include_docs: false,
-    limit,
-    skip,
-  });
-  return response.rows.map(({ id }) => id);
-};
+export const getDocIdsByIdRange =
+  (db: PouchDB.Database<Doc>) =>
+  async (
+    startkey: string,
+    endkey: string,
+    limit?: number,
+    skip = 0,
+  ): Promise<string[]> => {
+    const response = await db.allDocs({
+      startkey,
+      endkey,
+      include_docs: false,
+      limit,
+      skip,
+    });
+    return response.rows.map(({ id }) => id);
+  };
 
 const queryDocs = (
   db: PouchDB.Database<Doc>,
   view: string,
-  options: PouchDB.Query.Options<Doc, Record<string, unknown>>
-) => db
-  .query(view, options)
-  .then(({ rows }) => rows.map(({ doc }) => isDoc(doc) ? doc : null));
+  options: PouchDB.Query.Options<Doc, Record<string, unknown>>,
+) =>
+  db.query(view, options).then(({ rows }) =>
+    rows.map((row) => {
+      if ("doc" in row && row.doc !== undefined && row.doc !== null) {
+        const doc = row.doc;
+        return isDoc(doc) ? doc : null;
+      }
+      return null;
+    }),
+  );
 
 /** @internal */
-export const queryDocsByRange = (
-  db: PouchDB.Database<Doc>,
-  view: string
-) => async (
-  startkey: unknown,
-  endkey: unknown,
-  limit?: number,
-  skip = 0
-): Promise<Nullable<Doc>[]> => queryDocs(
-  db,
-  view,
-  {
-    include_docs: true,
-    startkey,
-    endkey,
-    limit,
-    skip,
-  }
-);
+export const queryDocsByRange =
+  (db: PouchDB.Database<Doc>, view: string) =>
+  async (
+    startkey: unknown,
+    endkey: unknown,
+    limit?: number,
+    skip = 0,
+  ): Promise<Nullable<Doc>[]> =>
+    queryDocs(db, view, {
+      include_docs: true,
+      startkey,
+      endkey,
+      limit,
+      skip,
+    });
 
 /** @internal */
-export const queryDocsByKey = (
-  db: PouchDB.Database<Doc>,
-  view: string
-) => async (
-  key: unknown,
-  limit: number,
-  skip: number
-): Promise<Nullable<Doc>[]> => queryDocs(db, view, { include_docs: true, key, limit, skip, reduce: false });
+export const queryDocsByKey =
+  (db: PouchDB.Database<Doc>, view: string) =>
+  async (key: unknown, limit: number, skip: number): Promise<Nullable<Doc>[]> =>
+    queryDocs(db, view, {
+      include_docs: true,
+      key,
+      limit,
+      skip,
+      reduce: false,
+    });
 
 const queryDocIds = (
   db: PouchDB.Database<Doc>,
   view: string,
-  options: PouchDB.Query.Options<Doc, Record<string, unknown>>
-) => db
-  .query(view, options)
-  .then(({ rows }) => rows.map(({ id }) => id as string));
+  options: PouchDB.Query.Options<Doc, Record<string, unknown>>,
+) =>
+  db
+    .query(view, options)
+    .then(({ rows }) => rows.map(({ id }) => id as string));
 
 /** @internal */
-export const queryDocIdsByRange = (
-  db: PouchDB.Database<Doc>,
-  view: string
-) => async (
-  startkey: unknown,
-  endkey: unknown,
-  limit?: number,
-  skip = 0
-): Promise<string[]> => queryDocIds(
-  db,
-  view,
-  {
-    include_docs: false,
-    startkey,
-    endkey,
-    limit,
-    skip,
-  }
-);
+export const queryDocIdsByRange =
+  (db: PouchDB.Database<Doc>, view: string) =>
+  async (
+    startkey: unknown,
+    endkey: unknown,
+    limit?: number,
+    skip = 0,
+  ): Promise<string[]> =>
+    queryDocIds(db, view, {
+      include_docs: false,
+      startkey,
+      endkey,
+      limit,
+      skip,
+    });
 
 /** @internal */
-export const queryDocIdsByKey = (
-  db: PouchDB.Database<Doc>,
-  view: string
-) => async (
-  key: unknown,
-  limit: number,
-  skip: number
-): Promise<string[]> => queryDocIds(db, view, { include_docs: false, reduce: false, key, limit, skip });
+export const queryDocIdsByKey =
+  (db: PouchDB.Database<Doc>, view: string) =>
+  async (key: unknown, limit: number, skip: number): Promise<string[]> =>
+    queryDocIds(db, view, {
+      include_docs: false,
+      reduce: false,
+      key,
+      limit,
+      skip,
+    });
 
 /**
  * Resolves a page containing an array of T using the getFunction to retrieve documents from the database
@@ -149,7 +165,7 @@ export const fetchAndFilter = <T>(
     const noMoreResults = docs.length < currentLimit;
     const newDocs = docs.filter((doc): doc is T => filterFunction(doc));
     const overFetchCount = currentDocs.length + newDocs.length - limit || 0;
-    const totalDocs = [ ...currentDocs, ...newDocs ].slice(0, limit);
+    const totalDocs = [...currentDocs, ...newDocs].slice(0, limit);
 
     if (noMoreResults) {
       return { data: totalDocs, cursor: null };
@@ -163,15 +179,13 @@ export const fetchAndFilter = <T>(
 
     // Re-fetch twice as many docs as we need to limit number of recursions
     const missingCount = currentLimit - newDocs.length;
-    logger.debug(`Found [${missingCount.toString()}] invalid docs. Re-fetching additional records.`);
+    logger.debug(
+      `Found [${missingCount.toString()}] invalid docs. Re-fetching additional records.`,
+    );
     const nextLimit = missingCount * 2;
     const nextSkip = currentSkip + currentLimit;
 
-    return recursionInner(
-      nextLimit,
-      nextSkip,
-      totalDocs,
-    );
+    return recursionInner(nextLimit, nextSkip, totalDocs);
   };
   return recursionInner;
 };
@@ -191,34 +205,34 @@ export const fetchAndFilterIds = (
     return idSet.size !== size;
   };
 
-  return fetchAndFilter(
-    getFunction,
-    filterFn,
-    limit
-  );
+  return fetchAndFilter(getFunction, filterFn, limit);
 };
 
 /** @internal */
-export const createDoc = (db: PouchDB.Database) => async (data: DataObject): Promise<Doc> => {
-  const { id, rev, ok } = await db.post(data);
-  if (!ok) {
-    throw new Error('Error creating document.');
-  }
-  return {
-    ...data,
-    _id: id,
-    _rev: rev
+export const createDoc =
+  (db: PouchDB.Database) =>
+  async (data: DataObject): Promise<Doc> => {
+    const { id, rev, ok } = await db.post(data);
+    if (!ok) {
+      throw new Error("Error creating document.");
+    }
+    return {
+      ...data,
+      _id: id,
+      _rev: rev,
+    };
   };
-};
 
 /** @internal */
-export const updateDoc = (db: PouchDB.Database<Doc>) => async (data: Doc): Promise<Doc> => {
-  const { ok, rev } = await db.put(data);
-  if (!ok) {
-    throw new Error('Error updating document.');
-  }
-  return {
-    ...data,
-    _rev: rev
+export const updateDoc =
+  (db: PouchDB.Database<Doc>) =>
+  async (data: Doc): Promise<Doc> => {
+    const { ok, rev } = await db.put(data);
+    if (!ok) {
+      throw new Error("Error updating document.");
+    }
+    return {
+      ...data,
+      _rev: rev,
+    };
   };
-};
